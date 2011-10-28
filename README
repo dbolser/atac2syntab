@@ -1,0 +1,90 @@
+
+# To perform assembly to assembly alignment, I've had good results
+# with the Assembly to Assembly' Comparison (ATAC) tool. The tool is
+# described here:
+
+# http://seqanswers.com/wiki/ATAC
+# http://goo.gl/pnMJ7 # Getting Started with ATAC
+
+
+# To get ATAC, you need to download the whole kmer project from SVN:
+#   svn co https://kmer.svn.sourceforge.net/svnroot/kmer
+
+
+# You will need to install the python devel package (to provide the
+# required 'include/Pyhton.h' file). Everything seems to have
+# configured and built correctly (using make instead of the requested
+# 'gmake' in the above 'Getting Started' instructions).
+
+
+
+## SHELL SCRIPT TO RUN ATAC
+
+# SETUP
+export ATACDIR=/path/to/atac
+export GENOMEDIR=/tmp/ATAC
+
+mkdir -p $GENOMEDIR
+
+
+# the two assembly versions... 
+# note, using unzipped versions
+export AV1=av1.fasta
+export AV2=av2.fasta
+
+
+
+# FIRST WE 'FLATTEN' THE FASTA SEQUENCES
+$ATACDIR/bin/leaff -f $AV1 -W > $GENOMEDIR/$(basename $AV1)
+$ATACDIR/bin/leaff -f $AV2 -W > $GENOMEDIR/$(basename $AV2)
+
+
+
+# AND FINALLY...
+perl $ATACDIR/bin/atac.pl \
+  -meryldir  $GENOMEDIR/meryl \
+  -dir       $GENOMEDIR \
+  -id1 SL2.40 -seq1 $GENOMEDIR/$(basename $AV1) \
+  -id2 ST3.10 -seq2 $GENOMEDIR/$(basename $AV2)
+
+
+
+# The important files are the 'uids'...
+
+cp $GENOMEDIR/*.uids ./Results
+
+
+# It's a simple matter to convert these files into GFF3 or SYNTAB
+# format, and I wrote the following two Perl scripts to perform the
+# task:
+
+atac2gff.plx
+atac2syntab.plx
+
+
+
+## Count the number of 'clumps'
+CLUMP=./Results/AV1vsAV2.ref\=AV1.clumpCost\=5000.atac.uids
+
+grep -c 'M c ' $CLUMP
+
+## Make GFF
+./atac2gff.plx $CLUMP > some.gff
+
+wc -l some.gff # Should match
+
+
+
+## GBSyn SYNTAB  (check clump filter in script)
+./atac2syntab.plx --s1 tom --s2 pot \
+    $CLUMP > some.syntab
+
+wc -l some.syntab # Should match
+
+
+## Just for fun...
+gbrowse_syn_load_alignment_database.pl -c -v \
+  -u www-potato \
+  -p abc123 \
+  -d dbi:mysql:www-potato:mysql.compbio.dundee.ac.uk \
+  Results/TOMvsPOT.syntab
